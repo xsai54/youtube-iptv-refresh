@@ -1,0 +1,37 @@
+
+name: YouTube Live Streams aktualisieren
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '13,43 * * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: iptv-stream-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+
+    steps:
+      - name: Repository abrufen
+        uses: actions/checkout@v4
+
+      - name: Python einrichten
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: yt-dlp installieren
+        run: python -m pip install --upgrade yt-dlp
+
+      - name: YouTube Streams aktualisieren
+        env:
+          WORKER_URL: https://youtube-iptv-live.54xsai54.workers.dev
+          SYNC_TOKEN: ${{ secrets.SYNC_TOKEN }}
+        run: python scripts/refresh.py
