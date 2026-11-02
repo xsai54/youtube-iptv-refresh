@@ -48,6 +48,17 @@ jobs:
               timeout=60
           ).strip()
 
+          
+          # Originalen CNN-Tuerk-Pfad mit // erhalten
+          if url.startswith('https://live.duhnet.tv/S2/HLS_LIVE/'):
+              url = url.replace(
+                  'https://live.duhnet.tv/S2/HLS_LIVE/',
+                  'https://live.duhnet.tv//S2/HLS_LIVE/',
+                  1
+              )
+
+          print('CNN Turk: Original-Pfad mit // gesetzt')
+          
           p = urlsplit(url)
 
           if p.scheme != 'https' or not p.path.lower().endswith('.m3u8'):
