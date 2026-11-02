@@ -1,0 +1,78 @@
+
+name: CNN Turk automatisch aktualisieren
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '7,37 * * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Streamlink installieren
+        run: python -m pip install --upgrade streamlink
+
+      - name: Stream pruefen und an Cloudflare senden
+        env:
+          WORKER_URL: https://youtube-iptv-live.54xsai54.workers.dev
+          SYNC_TOKEN: ${{ secrets.SYNC_TOKEN }}
+        run: |
+          python - <<'PY'
+          import json, os, subprocess, urllib.request
+          from urllib.parse import urlsplit, urljoin
+
+          source = 'https://www.cnnturk.com/canli-yayin'
+          url = subprocess.check_output(
+              ['streamlink', '--loglevel', 'error', '--stream-url', source, 'best'],
+              text=True, timeout=60
+          ).strip()
+          p = urlsplit(url)
+          if p.scheme != 'https' or not p.path.lower().endswith('.m3u8'):
+              raise RuntimeError('Keine sichere HLS-Adresse gefunden')
+
+          # Ohne Browser-Cookies oder Referer testen.
+          def read_m3u(address):
+              request = urllib.request.Request(
+                  address, headers={'User-Agent': 'VLC/3.0.20 LibVLC/3.0.20'}
+              )
+              with urllib.request.urlopen(request, timeout=20) as r:
+                  data = r.read(300000).decode('utf-8-sig', 'replace')
+              if not data.lstrip().startswith('#EXTM3U'):
+                  raise RuntimeError('Keine gueltige HLS-Playlist')
+              return data
+
+          manifest = read_m3u(url)
+          if '#EXT-X-STREAM-INF' in manifest:
+              lines = [x.strip() for x in manifest.splitlines() if x.strip()]
+              variants = [lines[i + 1] for i, x in enumerate(lines[:-1])
+                          if x.startswith('#EXT-X-STREAM-INF')
+                          and not lines[i + 1].startswith('#')]
+              if not variants:
+                  raise RuntimeError('HLS-Variante fehlt')
+              read_m3u(urljoin(url, variants[-1]))
+
+          if not os.environ.get('SYNC_TOKEN'):
+              raise RuntimeError('GitHub Secret SYNC_TOKEN fehlt')
+          payload = {'results': [{
+              'slug': 'cnn-turk', 'url': url,
+              'status': 'HLS gefunden',
+              'message': 'CNN Turk offiziell: HLS-Playlist erreichbar'
+          }]}
+          req = urllib.request.Request(
+              os.environ['WORKER_URL'].rstrip('/') + '/api/sync',
+              data=json.dumps(payload).encode(), method='POST',
+              headers={'Content-Type': 'application/json',
+                       'Authorization': 'Bearer ' + os.environ['SYNC_TOKEN']}
+          )
+          with urllib.request.urlopen(req, timeout=30) as response:
+              result = json.load(response)
+          if not result.get('ok'):
+              raise RuntimeError('Cloudflare-Update fehlgeschlagen')
+          print('CNN Turk: HLS-Playlist erreichbar; Cloudflare aktualisiert.')
+          print('IPTV-Wiedergabe am Fernseher noch gesondert pruefen.')
+          PY
