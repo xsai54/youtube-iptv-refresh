@@ -119,10 +119,11 @@ jobs:
               os.environ['WORKER_URL'].rstrip('/') + '/api/sync',
               data=json.dumps(payload).encode('utf-8'),
               method='POST',
-              headers={
-                  'Content-Type': 'application/json',
-                  'Authorization': 'Bearer ' + token
-              }
+          headers={
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token,
+          'User-Agent': 'CNNturk-IPTV-Sync/1.0'
+            }
           )
 
           print('Uebertrage Stream an Cloudflare')
