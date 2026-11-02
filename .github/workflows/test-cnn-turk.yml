@@ -1,0 +1,44 @@
+
+name: CNN Turk offiziellen Stream pruefen
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    steps:
+      - name: Streamlink installieren
+        run: python -m pip install --upgrade streamlink
+
+      - name: CNN Turk Livestream pruefen
+        shell: bash
+        run: |
+          for url in \
+            "https://www.cnnturk.com/canli-yayin" \
+            "https://video.cnnturk.com/canli-yayin"
+          do
+            echo "Pruefe: $url"
+
+            if result="$(streamlink --loglevel error --stream-url "$url" best 2>/tmp/cnn-error.log)" && [[ "$result" == https://* ]]; then
+              CNN_URL="$result" python - <<'PY'
+          import os
+          from urllib.parse import urlsplit
+          u = urlsplit(os.environ["CNN_URL"])
+          print("Stream-Adresse gefunden: JA")
+          print("Host:", u.hostname)
+          print("HLS:", ".m3u8" in u.path.lower())
+          PY
+              exit 0
+            fi
+
+            echo "Keine Stream-Adresse ermittelt."
+          done
+
+          echo "Test fehlgeschlagen: Offizieller Stream nicht aufloesbar."
+          exit 1
